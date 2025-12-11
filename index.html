@@ -33,28 +33,47 @@
         color: #003;
         text-shadow: 0 0 4px white;
     }
+
+    /* 🔴 NEW CODE ADDED HERE — TAP TO PLAY BUTTON */
+    #tapBtn {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #ffffffcc;
+        padding: 18px 40px;
+        border-radius: 12px;
+        font-size: 26px;
+        font-weight: bold;
+        color: #222;
+        box-shadow: 0 0 10px #0005;
+        text-align: center;
+        display: none;
+        user-select: none;
+    }
 </style>
 </head>
 <body>
 
 <div id="scoreBox">Score: <span id="sc">0</span></div>
+
+<div id="tapBtn">Tap to Play</div>
+
 <canvas id="game" width="420" height="600"></canvas>
 
 <script>
 const c = document.getElementById("game");
 const ctx = c.getContext("2d");
 const scEl = document.getElementById("sc");
+const tapBtn = document.getElementById("tapBtn");
 
 const W = c.width, H = c.height;
 
-// Load bird sprite
 const birdImg = new Image();
-birdImg.src = "bird.png";   // <-- put bird.png in same folder
+birdImg.src = "bird.png";
 
-// Audio (YOUR ABUSIVE CLIP HERE 😂)
 const deathAudio = new Audio("death.mp3");
 
-// Bird
 let bird = {
     x: 100,
     y: H/2,
@@ -67,13 +86,12 @@ let bird = {
 let gravity = 0.4;
 let jumpPower = -7;
 
-// Pipes Array
 let pipes = [];
 let frame = 0;
 let score = 0;
-let running = true;
+let running = false;  
+let started = false;  
 
-// RESET
 function reset(){
     bird.y = H/2;
     bird.vy = 0;
@@ -81,10 +99,12 @@ function reset(){
     frame = 0;
     score = 0;
     scEl.textContent = "0";
-    running = true;
+    running = false;
+    started = false;
+    tapBtn.textContent = "Tap to Play";
+    tapBtn.style.display = "block";
 }
 
-// Create pipe with spikes
 function addPipe(){
     const gap = 150;
     const topHeight = 80 + Math.random() * 260;
@@ -97,132 +117,100 @@ function addPipe(){
     });
 }
 
-// Draw spikes
-function drawSpikes(x, y, count, direction){
+function drawSpikes(x, y, count, dir){
     ctx.fillStyle = "#146b12";
     let size = 16;
     for(let i = 0; i < count; i++){
-        if(direction === "down"){
-            ctx.beginPath();
-            ctx.moveTo(x + i*size, y);
-            ctx.lineTo(x + i*size + size/2, y + size);
-            ctx.lineTo(x + i*size + size, y);
-            ctx.fill();
-        } else {
-            ctx.beginPath();
-            ctx.moveTo(x + i*size, y);
-            ctx.lineTo(x + i*size + size/2, y - size);
-            ctx.lineTo(x + i*size + size, y);
-            ctx.fill();
-        }
+        ctx.beginPath();
+        ctx.moveTo(x + i*size, y);
+        ctx.lineTo(x + i*size + size/2, y + (dir==="down" ? size : -size));
+        ctx.lineTo(x + i*size + size, y);
+        ctx.fill();
     }
 }
 
-// Collision check
 function hits(pipe){
     let bx1 = bird.x, bx2 = bird.x + bird.width;
     let by1 = bird.y, by2 = bird.y + bird.height;
 
-    // upper pipe
-    if(bx2 > pipe.x && bx1 < pipe.x + 60 &&
-       by1 < pipe.top) return true;
-
-    // lower pipe
-    if(bx2 > pipe.x && bx1 < pipe.x + 60 &&
-       by2 > pipe.top + pipe.gap) return true;
+    if(bx2 > pipe.x && bx1 < pipe.x + 60 && by1 < pipe.top) return true;
+    if(bx2 > pipe.x && bx1 < pipe.x + 60 && by2 > pipe.top + pipe.gap) return true;
 
     return false;
 }
 
-// Game over
 function gameOver(){
     running = false;
-    // Play your audio
     deathAudio.currentTime = 0;
     deathAudio.play().catch(()=>{});
+
+    tapBtn.textContent = "Tap to Restart";
+    tapBtn.style.display = "block";
 }
 
-// Main loop
 function loop(){
     frame++;
-
     ctx.clearRect(0,0,W,H);
 
-    // Add pipes automatically
-    if(frame % 95 === 0) addPipe();
+    if(frame % 95 === 0 && running) addPipe();
 
-    // Draw & move pipes
     pipes.forEach((p, i) => {
         if(running) p.x -= 2.5;
 
-        // Pipe body
         ctx.fillStyle = "#1fa025";
 
-        // Top pipe
         ctx.fillRect(p.x, 0, 60, p.top);
         drawSpikes(p.x, p.top, 4, "down");
 
-        // Bottom pipe
-        ctx.fillRect(p.x, p.top + p.gap, 60, H - (p.top + p.gap));
+        ctx.fillRect(p.x, p.top + p.gap, 60, H-(p.top+p.gap));
         drawSpikes(p.x, p.top + p.gap, 4, "up");
 
-        // Scoring
         if(!p.passed && p.x + 60 < bird.x){
             score++;
             scEl.textContent = score;
             p.passed = true;
         }
 
-        // Remove old pipes
         if(p.x < -80) pipes.splice(i,1);
 
-        // Collision
         if(running && hits(p)){
             gameOver();
         }
     });
 
-    // Bird physics
     if(running){
         bird.vy += gravity;
         bird.y += bird.vy;
-        
-    } else {
-        bird.vy += gravity;
-        bird.y += bird.vy;
-        
     }
 
-    // Boundary die
     if(bird.y > H - bird.height || bird.y < 0){
         if(running) gameOver();
     }
 
-    // Draw bird with rotation
-    ctx.save();
-    ctx.translate(bird.x + bird.width/2, bird.y + bird.height/2);
-    ctx.rotate(bird.rot);
-    ctx.drawImage(birdImg, -bird.width/2, -bird.height/2, bird.width, bird.height);
-    ctx.restore();
+    ctx.drawImage(birdImg, bird.x, bird.y, bird.width, bird.height);
 
     requestAnimationFrame(loop);
 }
 
-// Jump event
-window.addEventListener("keydown", (e)=>{
-    if(e.code === "Space"){
-        if(running) bird.vy = jumpPower;
-        else reset();
+function startGame(){
+    if(!started){
+        started = true;
+        running = true;
+        tapBtn.style.display = "none";
+        bird.vy = jumpPower;
+    } else if(!running){
+        reset();
+    } else {
+        bird.vy = jumpPower;
     }
+}
+
+window.addEventListener("keydown", e=>{
+    if(e.code === "Space") startGame();
 });
+c.addEventListener("click", startGame);
+tapBtn.addEventListener("click", startGame);
 
-c.addEventListener("click", ()=>{
-    if(running) bird.vy = jumpPower;
-    else reset();
-});
-
-
-// Start
 reset();
 loop();
 </script>
